@@ -72,8 +72,8 @@
         .section-view { display: none; }
         .section-view.active { display: block; }
 
-        /* الطاولات الـ 16 */
-        .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 12px; }
+        /* الطاولات الـ 80 */
+        .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 12px; max-height: 450px; overflow-y: auto; padding: 5px; }
         .table-card { background: #0f172a; border: 1px solid var(--border-color); padding: 12px 5px; text-align: center; border-radius: 10px; cursor: pointer; transition: all 0.2s; }
         .table-card:hover { border-color: #38bdf8; }
         .table-card.busy { border-color: var(--danger); background: rgba(239, 68, 68, 0.08); color: #fca5a5; }
@@ -100,7 +100,7 @@
 
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('pos')">🛒 الكاشير والمنيو</button>
-        <button class="tab-btn" onclick="switchTab('tables')">🪑 الصالة والـ 16 طاولة</button>
+        <button class="tab-btn" onclick="switchTab('tables')">🪑 الصالة والـ 80 طاولة</button>
         <button class="tab-btn" onclick="switchTab('kitchen')">👨‍🍳 شاشة المطبخ</button>
     </div>
 
@@ -110,6 +110,8 @@
             <div id="view-pos" class="section-view active card">
                 <div class="card-title">لوحة طلبات الكاشير السريعة</div>
                 
+                <input type="text" id="menuSearchInput" oninput="searchMenu()" placeholder="🔍 ابحث عن أي صنف بالاسم سريعاً..." style="width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 10px; color: white; margin-bottom: 15px; font-family: 'Cairo'; font-size: 14px;">
+
                 <div class="menu-filters">
                     <button class="filter-btn active" id="btn-food" onclick="filterMenu('food')">🍔 الأكل والوجبات</button>
                     <button class="filter-btn" id="btn-drinks" onclick="filterMenu('drinks')">🍹 المشروبات كاملة</button>
@@ -121,7 +123,10 @@
             </div>
 
             <div id="view-tables" class="section-view card">
-                <div class="card-title">خريطة الصالة وإدارة الحجوزات (16 طاولة)</div>
+                <div class="card-title">خريطة الصالة وإدارة الحجوزات (80 طاولة)</div>
+                
+                <input type="number" id="tableSearchInput" oninput="searchTables()" placeholder="🔍 اكتب رقم الطاولة للوصول السريع (مثال: 55)..." style="width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border-color); border-radius: 10px; color: white; margin-bottom: 15px; font-family: 'Cairo'; font-size: 14px;">
+
                 <div class="tables-grid" id="tablesGrid">
                     </div>
             </div>
@@ -148,18 +153,24 @@
                 <div class="total-row final"><span>الإجمالي النهائي:</span><span id="totalPrice">0.00</span> ج.م</div>
             </div>
 
-            <div style="display: flex; gap: 10px;">
-                <button class="danger" onclick="clearCurrentOrder()" style="flex: 1;">إلغاء ❌</button>
-                <button onclick="sendOrderToKitchen()" style="flex: 2;">تأكيد وإرسال للمطبخ 🚀</button>
+            <div style="display: flex; gap: 10px; flex-direction: column;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="danger" onclick="clearCurrentOrder()" style="flex: 1;">إلغاء ❌</button>
+                    <button onclick="sendOrderToKitchenWithMemory()" style="flex: 2;">تأكيد وإرسال للمطبخ 🚀</button>
+                </div>
+                
+                <button id="deliverFoodBtn" onclick="deliverFoodFromKitchen()" style="background: #38bdf8; color: black; display: none; margin-top: 5px; font-weight: bold;">🥡 تم استلام الأكل وتوصيله للطاولة الكاشير استلم ✓</button>
+
+                <button id="closeTableBtn" onclick="checkoutTable()" style="background: var(--success); color: white; display: none;">🪑 إنهاء وحساب الطاولة الحالية وتفريغها ✓</button>
             </div>
         </div>
 
     </div>
 
     <script>
-        // داتا المنيو مقسمة بـ الـ category داخلياً
+        // داتا المنيو مقسمة بـ الـ category داخلياً (100 صنف كامل ومتنوع)
         const allProducts = [
-            // الأكل
+            // === الأكل والوجبات (40 صنف) ===
             { id: 1, name: 'برجر دبل تشيز', price: 120, icon: '🍔', category: 'food' },
             { id: 2, name: 'بيتزا سوبر بريم', price: 150, icon: '🍕', category: 'food' },
             { id: 3, name: 'باستا الفريدو دجاج', price: 135, icon: '🍝', category: 'food' },
@@ -167,33 +178,123 @@
             { id: 5, name: 'حواوشي بلدي فاخر', price: 70, icon: '🫓', category: 'food' },
             { id: 6, name: 'وجبة كبسة دجاج', price: 180, icon: '🍗', category: 'food' },
             { id: 7, name: 'بطاطس فريسكاس', price: 45, icon: '🍟', category: 'food' },
-            
-            // المشروبات
+            { id: 8, name: 'شاورما عربي دبل', price: 110, icon: '🌯', category: 'food' },
+            { id: 9, name: 'برجر مشروم صوص', price: 130, icon: '🍔', category: 'food' },
+            { id: 10, name: 'بيتزا فور تشيز', price: 140, icon: '🍕', category: 'food' },
+            { id: 11, name: 'باستا كاري دجاج', price: 130, icon: '🍝', category: 'food' },
+            { id: 12, name: 'شيش طاووق وجبة', price: 170, icon: '🍢', category: 'food' },
+            { id: 13, name: 'كوردون بلو فاخر', price: 190, icon: '🥩', category: 'food' },
+            { id: 14, name: 'ساندوتش فاهيتا', price: 100, icon: '🥖', category: 'food' },
+            { id: 15, name: 'نودلز خضار صيني', price: 85, icon: '🍜', category: 'food' },
+            { id: 16, name: 'سلطة سيزر دجاج', price: 75, icon: '🥗', category: 'food' },
+            { id: 17, name: 'كبة شامية (4 قطع)', price: 60, icon: '🧆', category: 'food' },
+            { id: 18, name: 'وجبة نصف فرخة مشوية', price: 160, icon: '🍗', category: 'food' },
+            { id: 19, name: 'ميكس جريل مشويات', price: 250, icon: '🥩', category: 'food' },
+            { id: 20, name: 'ساندوتش زنجر سوبر', price: 105, icon: '🍔', category: 'food' },
+            { id: 21, name: 'بيتزا باربيكيو دجاج', price: 155, icon: '🍕', category: 'food' },
+            { id: 22, name: 'باستا سيفود وايت صوص', price: 175, icon: '🍝', category: 'food' },
+            { id: 23, name: 'تورتيلا كباب لحم', price: 115, icon: '🌯', category: 'food' },
+            { id: 24, name: 'وجبة كفتة بلدي', price: 150, icon: '🍢', category: 'food' },
+            { id: 25, name: 'حواوشي موتزاريلا', price: 85, icon: '🫓', category: 'food' },
+            { id: 26, name: 'وجبة أرز بالخلطة دجاج', price: 125, icon: '🍛', category: 'food' },
+            { id: 27, name: 'أصابع موتزاريلا مقلية', price: 55, icon: '🧀', category: 'food' },
+            { id: 28, name: 'حلقات بصل مقرمشة', price: 40, icon: '🧅', category: 'food' },
+            { id: 29, name: 'شوربة كريمة بالفطر', price: 50, icon: '🥣', category: 'food' },
+            { id: 30, name: 'ساندوتش كبدة إسكندراني', price: 65, icon: '🥖', category: 'food' },
+            { id: 31, name: 'ساندوتش سجق شرقي', price: 70, icon: '🥖', category: 'food' },
+            { id: 32, name: 'بيتزا تونة وبصل', price: 135, icon: '🍕', category: 'food' },
+            { id: 33, name: 'لازانيا باللحم المفروم', price: 145, icon: '🍝', category: 'food' },
+            { id: 34, name: 'وجبة ميكس سي فود', price: 280, icon: '🐟', category: 'food' },
+            { id: 35, name: 'تacos مكسيكي حار', price: 95, icon: '🌮', category: 'food' },
+            { id: 36, name: 'سلطة فتوش لبنانية', price: 45, icon: '🥗', category: 'food' },
+            { id: 37, name: 'شوربة لسان عصفور', price: 35, icon: '🥣', category: 'food' },
+            { id: 38, name: 'وجبة حمام محشي رز', price: 190, icon: '🕊️', category: 'food' },
+            { id: 39, name: 'وجبة ريش ضأن مشوية', price: 290, icon: '🥩', category: 'food' },
+            { id: 40, name: 'وجبة شنيتزل صوص ليمون', price: 165, icon: '🍗', category: 'food' },
+
+            // === المشروبات كاملة (30 صنف) ===
             { id: 101, name: 'كولا مثلجة', price: 25, icon: '🥤', category: 'drinks' },
             { id: 102, name: 'عصير مانجو طبيعي', price: 45, icon: '🍹', category: 'drinks' },
             { id: 103, name: 'موجيتو ليمون نعناع', price: 50, icon: '🍹', category: 'drinks' },
             { id: 104, name: 'قهوة إسبريسو دبل', price: 35, icon: '☕', category: 'drinks' },
             { id: 105, name: 'شاي فرنسي باللبن', price: 30, icon: '🫖', category: 'drinks' },
-            
-            // الحلويات
+            { id: 106, name: 'عصير فراولة فريش', price: 40, icon: '🍓', category: 'drinks' },
+            { id: 107, name: 'عصير جوافة باللبن', price: 40, icon: '🍹', category: 'drinks' },
+            { id: 108, name: 'سموذي بطيخ مثلج', price: 45, icon: '🍉', category: 'drinks' },
+            { id: 109, name: 'ميلك شيك شوكولاتة', price: 55, icon: '🥤', category: 'drinks' },
+            { id: 110, name: 'ميلك شيك فانيليا', price: 55, icon: '🥤', category: 'drinks' },
+            { id: 111, name: 'ميلك شيك أوريو فخم', price: 60, icon: '🥤', category: 'drinks' },
+            { id: 112, name: 'موجيتو بلو بيري', price: 55, icon: '🍹', category: 'drinks' },
+            { id: 113, name: 'عصير برتقال فريش', price: 35, icon: '🍊', category: 'drinks' },
+            { id: 114, name: 'عصير كوكتيل طبقات', price: 50, icon: '🍹', category: 'drinks' },
+            { id: 115, name: 'ميكس أفوكادو عسل', price: 70, icon: '🥑', category: 'drinks' },
+            { id: 116, name: 'كابتشينو رغوة كثيفة', price: 45, icon: '☕', category: 'drinks' },
+            { id: 117, name: 'لاتيه ماكياتو بارد', price: 50, icon: '🥛', category: 'drinks' },
+            { id: 118, name: 'شاي ميكس كرك هندى', price: 25, icon: '☕', category: 'drinks' },
+            { id: 119, name: 'هوت شوكليت مارشميلو', price: 50, icon: '☕', category: 'drinks' },
+            { id: 120, name: 'مشروب طاقة مثلج', price: 45, icon: '⚡', category: 'drinks' },
+            { id: 121, name: 'مياه معدنية صغيرة', price: 15, icon: '💧', category: 'drinks' },
+            { id: 122, name: 'مياه غازية دايت', price: 25, icon: '🥤', category: 'drinks' },
+            { id: 123, name: 'عصير أناناس طبيعي', price: 50, icon: '🍍', category: 'drinks' },
+            { id: 124, name: 'عصير رمان فريش', price: 45, icon: '🍹', category: 'drinks' },
+            { id: 125, name: 'سموذي ليمون ونعناع', price: 40, icon: '🍋', category: 'drinks' },
+            { id: 126, name: 'سبرايت ليمون تانغ', price: 25, icon: '🥤', category: 'drinks' },
+            { id: 127, name: 'ميكس توت بري غازي', price: 50, icon: '🍹', category: 'drinks' },
+            { id: 128, name: 'شاي أخضر بالياسمين', price: 20, icon: '🍵', category: 'drinks' },
+            { id: 129, name: 'سحلب مكسرات دافئ', price: 40, icon: '🥣', category: 'drinks' },
+            { id: 130, name: 'أيس كوفي كراميل صوص', price: 55, icon: '☕', category: 'drinks' },
+
+            // === الحلويات والتحلية (30 صنف) ===
             { id: 201, name: 'مولتن كيك شوكولاتة', price: 65, icon: '🍰', category: 'sweets' },
             { id: 202, name: 'وافل نوتيلا وفواكه', price: 75, icon: '🧇', category: 'sweets' },
             { id: 203, name: 'أم علي بالمكسرات', price: 55, icon: '🥣', category: 'sweets' },
             { id: 204, name: 'آيس كريم بولات ميكس', price: 40, icon: '🍨', category: 'sweets' },
-            { id: 205, name: 'تشيز كيك لوتس', price: 80, icon: '🍰', category: 'sweets' }
+            { id: 205, name: 'تشيز كيك لوتس', price: 80, icon: '🍰', category: 'sweets' },
+            { id: 206, name: 'سينابون صوص كراميل', price: 60, icon: '🥮', category: 'sweets' },
+            { id: 207, name: 'كريب نوتيلا بندق', price: 70, icon: '🥞', category: 'sweets' },
+            { id: 208, name: 'براونيز كيك دافئ', price: 55, icon: '🍫', category: 'sweets' },
+            { id: 209, name: 'بسبوسة قشطة بلدي', price: 45, icon: '🥮', category: 'sweets' },
+            { id: 210, name: 'كنافة نابلسية جبنة', price: 65, icon: '🥧', category: 'sweets' },
+            { id: 211, name: 'أرز باللبن والمكسرات', price: 35, icon: '🥣', category: 'sweets' },
+            { id: 212, name: 'كاسترد بصوص الفراولة', price: 35, icon: '🍮', category: 'sweets' },
+            { id: 213, name: 'جيلي فراولة قطع موز', price: 30, icon: '🍮', category: 'sweets' },
+            { id: 214, name: 'سلطة فواكه آيس كريم', price: 60, icon: '🍧', category: 'sweets' },
+            { id: 215, name: 'كيكة العسل الروسية', price: 75, icon: '🍰', category: 'sweets' },
+            { id: 216, name: 'تارت الفواكه الطازجة', price: 50, icon: '🥧', category: 'sweets' },
+            { id: 217, name: 'كريب ميكس شوكولاتة', price: 75, icon: '🥞', category: 'sweets' },
+            { id: 218, name: 'وافل لوتس صوص كرانش', price: 75, icon: '🧇', category: 'sweets' },
+            { id: 219, name: 'دونات نوتيلا كاندي', price: 35, icon: '🍩', category: 'sweets' },
+            { id: 220, name: 'كب كيك ريد فيلفيت', price: 30, icon: '🧁', category: 'sweets' },
+            { id: 221, name: 'بلح الشام بالقشطة', price: 45, icon: '🥖', category: 'sweets' },
+            { id: 222, name: 'صوابع زينب عسل خفيف', price: 35, icon: '🥖', category: 'sweets' },
+            { id: 223, name: 'زلابية نوتيلا وسكر', price: 40, icon: '🍡', category: 'sweets' },
+            { id: 224, name: 'كيكة قدرة قادر فخمة', price: 55, icon: '🍮', category: 'sweets' },
+            { id: 225, name: 'تشيز كيك فستق حلبي', price: 85, icon: '🍰', category: 'sweets' },
+            { id: 226, name: 'أم علي قشطة زيادة', price: 65, icon: '🥣', category: 'sweets' },
+            { id: 227, name: 'كنافة مانجو كاسات', price: 55, icon: '🍨', category: 'sweets' },
+            { id: 228, name: 'غزل البنات آيس كريم', price: 45, icon: '🍨', category: 'sweets' },
+            { id: 229, name: 'كيكة الشوكولاتة الغارقة', price: 65, icon: '🍰', category: 'sweets' },
+            { id: 230, name: 'ميكس حلويات شرقية فاخر', price: 90, icon: '🥮', category: 'sweets' }
         ];
 
         let currentOrder = [];
         let kitchenOrders = [];
         let totalSales = 0;
         let selectedTable = null;
-        let currentFilter = 'food'; // الفلتر الافتراضي عند فتح البرنامج
+        let currentFilter = 'food'; 
         
         let tableStatus = {};
-        for (let i = 1; i <= 16; i++) { tableStatus[i] = false; }
+        for (let i = 1; i <= 80; i++) { tableStatus[i] = false; }
+
+        let tableOrders = {}; 
+        for (let i = 1; i <= 80; i++) { tableOrders[i] = []; }
+
+        // تزويد "حوار المطبخ": كائن لحفظ حالة الأكل الخاص بكل طاولة (تحضير أم جاهز للتسليم)
+        let tableKitchenStatus = {};
+        for (let i = 1; i <= 80; i++) { tableKitchenStatus[i] = "empty"; } // empty, cooking, ready
 
         window.onload = function() {
-            filterMenu('food'); // عرض الأكل أول ما يفتح الصفحة
+            filterMenu('food'); 
             initTables();
             updateInvoiceDisplay();
         };
@@ -206,18 +307,14 @@
             if (event) event.target.classList.add('active');
         }
 
-        // دالة الفلترة (تغيير المعروض بناء على ضغطة الزرار)
         function filterMenu(category) {
             currentFilter = category;
-            
-            // تغيير ألوان أزرار الفلترة الفرعية
             document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`btn-${category}`).classList.add('active');
 
             const grid = document.getElementById('dynamicMenuGrid');
             grid.innerHTML = '';
 
-            // تصفية المنتجات وعرض المطابق فقط
             const filtered = allProducts.filter(p => p.category === category);
             filtered.forEach(item => {
                 const div = document.createElement('div');
@@ -232,15 +329,30 @@
             });
         }
 
+        // تزويد "حوار المطبخ": تلوين خريطة الطاولات حسب حالة المطبخ (أزرق لو الأكل بيتطبخ، برتقالي لو الأكل جاهز ومستني استلامه)
         function initTables() {
             const grid = document.getElementById('tablesGrid');
             grid.innerHTML = '';
-            for (let i = 1; i <= 16; i++) {
+            for (let i = 1; i <= 80; i++) {
+                let statusClass = '';
+                let statusIcon = '🪑';
+                
+                if (tableStatus[i]) {
+                    statusClass = 'busy'; // مشغولة عامة
+                    if (tableKitchenStatus[i] === "cooking") {
+                        statusClass = 'busy'; 
+                        statusIcon = '👨‍🍳'; // تحت الطبخ
+                    } else if (tableKitchenStatus[i] === "ready") {
+                        statusClass = 'selected'; // جاهز للتسليم بلون مميز
+                        statusIcon = '🥡'; 
+                    }
+                }
+
                 const div = document.createElement('div');
-                div.className = `table-card ${tableStatus[i] ? 'busy' : ''} ${selectedTable === i ? 'selected' : ''}`;
+                div.className = `table-card ${statusClass} ${selectedTable === i ? 'selected' : ''}`;
                 div.id = `table-${i}`;
                 div.onclick = () => selectTable(i);
-                div.innerHTML = `<div class="t-icon">🪑</div><span>طاولة ${i}</span>`;
+                div.innerHTML = `<div class="t-icon">${statusIcon}</div><span>طاولة ${i}</span>`;
                 grid.appendChild(div);
             }
         }
@@ -249,6 +361,18 @@
             selectedTable = num;
             initTables();
             document.getElementById('activeTableLabel').innerText = `طاولة رقم: ${num}`;
+            
+            currentOrder = [...tableOrders[num]]; 
+            updateInvoiceDisplay();
+
+            // تزويد "حوار المطبخ": التحكم في إظهار زرار الاستلام بناءً على حالة الأكل في المطبخ لهذه الطاولة
+            if (tableKitchenStatus[num] === "ready") {
+                document.getElementById('deliverFoodBtn').style.display = 'block';
+            } else {
+                document.getElementById('deliverFoodBtn').style.display = 'none';
+            }
+
+            document.getElementById('closeTableBtn').style.display = 'block';
             switchTab('pos');
         }
 
@@ -262,23 +386,18 @@
             updateInvoiceDisplay();
         }
 
-        /* --- حذف صنف بالكامل أو تقليل الكمية --- */
         function removeProductFromOrder(id) {
-            // نبحث عن الصنف داخل الفاتورة
             const itemIndex = currentOrder.findIndex(i => i.id === id);
             if (itemIndex > -1) {
                 if (currentOrder[itemIndex].qty > 1) {
-                    // لو الكمية أكبر من 1، قلل الكمية بمقدار واحد
                     currentOrder[itemIndex].qty--;
                 } else {
-                    // لو هي حبة واحدة بس، احذف الصنف تماماً من القائمة
                     currentOrder.splice(itemIndex, 1);
                 }
             }
-            updateInvoiceDisplay(); // إعادة حساب وتحديث شكل الفاتورة
+            updateInvoiceDisplay(); 
         }
 
-        // تحديث وعرض الفاتورة مع إضافة زرار الـ سلة المخملي 🗑️
         function updateInvoiceDisplay() {
             const list = document.getElementById('orderItemsList');
             list.innerHTML = '';
@@ -313,39 +432,15 @@
             currentOrder = [];
             selectedTable = null;
             document.getElementById('activeTableLabel').innerText = `تيك أواي / سفري`;
+            document.getElementById('closeTableBtn').style.display = 'none'; 
+            document.getElementById('deliverFoodBtn').style.display = 'none'; 
             initTables();
             updateInvoiceDisplay();
         }
 
-        function sendOrderToKitchen() {
-            if (currentOrder.length === 0) {
-                alert('الفاتورة فارغة! اختر بعض الأصناف أولاً.');
-                return;
-            }
+        function sendOrderToKitchen() {}
 
-            const orderId = Date.now();
-            const orderSummary = currentOrder.map(i => `${i.name} (×${i.qty})`).join(' ، ');
-            
-            kitchenOrders.push({
-                id: orderId,
-                details: orderSummary,
-                table: selectedTable ? `طاولة ${selectedTable}` : 'تيك أواي'
-            });
-
-            if (selectedTable) {
-                tableStatus[selectedTable] = true;
-                initTables();
-            }
-
-            let finalPrice = parseFloat(document.getElementById('totalPrice').innerText);
-            totalSales += finalPrice;
-            document.getElementById('drawerTotal').innerText = totalSales.toFixed(2);
-
-            updateKitchenDisplay();
-            clearCurrentOrder();
-            alert('🚀 تم إرسال الطلب المجمع للمطبخ وتحديث الخزينة واللوحات!');
-        }
-
+        // تزويد "حوار المطبخ": تغيير شاشة تحضير الطلبات بالمطبخ لتدعم دورة حياة الطلب الحقيقية
         function updateKitchenDisplay() {
             const list = document.getElementById('kitchenList');
             document.getElementById('kitchenCount').innerText = `${kitchenOrders.length} طلبات`;
@@ -357,6 +452,14 @@
             }
 
             kitchenOrders.forEach(order => {
+                // نتحقق من حالة الطلب لعرض الزرار المناسب للشيف في شاشة المطبخ
+                let actionButton = '';
+                if (order.status === "cooking") {
+                    actionButton = `<button onclick="readyKitchenOrder(${order.id})" style="width:auto; padding:6px 15px; font-size:13px; background:var(--accent-color); color:black;">👨‍🍳 جاهز للتسليم</button>`;
+                } else {
+                    actionButton = `<span style="color:var(--success); font-weight:bold; font-size:13px;">🥡 في انتظار استلام الكاشير</span>`;
+                }
+
                 const li = document.createElement('li');
                 li.className = 'kitchen-order';
                 li.innerHTML = `
@@ -364,15 +467,156 @@
                         <span style="background:#1e293b; padding:2px 8px; border-radius:4px; font-size:12px; margin-left:10px; color:var(--accent-color); font-weight:bold;">${order.table}</span>
                         <span>${order.details}</span>
                     </div>
-                    <button onclick="finishKitchenOrder(${order.id})" style="width:auto; padding:6px 15px; font-size:13px; background:var(--success); color:white;">✓ تم التجهيز</button>
+                    ${actionButton}
                 `;
                 list.appendChild(li);
             });
         }
 
-        function finishKitchenOrder(id) {
-            kitchenOrders = kitchenOrders.filter(o => o.id !== id);
+        function finishKitchenOrder(id) {}
+
+        // =======================================================
+        // الـ دالات الإضافية المـزودة للنظام بدون تـعديل المنطق القديم
+        // =======================================================
+
+        function sendOrderToKitchenWithMemory() {
+            if (currentOrder.length === 0) {
+                alert('الفاتورة فارغة! اختر بعض الأصناف أولاً.');
+                return;
+            }
+
+            if (selectedTable) {
+                tableOrders[selectedTable] = [...currentOrder];
+                tableStatus[selectedTable] = true;
+                tableKitchenStatus[selectedTable] = "cooking"; // تعيين الحالة تحت الطبخ
+                initTables();
+            }
+
+            const orderId = Date.now();
+            const orderSummary = currentOrder.map(i => `${i.name} (×${i.qty})`).join(' ، ');
+            
+            kitchenOrders.push({
+                id: orderId,
+                details: orderSummary,
+                table: selectedTable ? `طاولة ${selectedTable}` : 'تيك أواي',
+                tableNum: selectedTable,
+                status: "cooking" // الطلب يبدأ بمرحلة الطبخ والتحضير
+            });
+
+            let finalPrice = parseFloat(document.getElementById('totalPrice').innerText);
+            totalSales += finalPrice;
+            document.getElementById('drawerTotal').innerText = totalSales.toFixed(2);
+
             updateKitchenDisplay();
+            clearCurrentOrder();
+            alert('🚀 تم إرسال الطلب وحفظه بذاكرة الطاولة وبدأ الطبخ في المطبخ!');
+        }
+
+        // تزويد "حوار المطبخ": دالة تضغط عليها شاشة المطبخ لما الأكل يخلص طبخ ويحتاج تسليم
+        function readyKitchenOrder(id) {
+            const order = kitchenOrders.find(o => o.id === id);
+            if (order) {
+                order.status = "ready"; // تحديث حالة الطلب في قائمة المطبخ
+                if (order.tableNum) {
+                    tableKitchenStatus[order.tableNum] = "ready"; // الطاولة الحقيقية أكلها جاهز
+                }
+                initTables();
+                updateKitchenDisplay();
+                alert(`🔔 إشعار: أكل ${order.table} جاهز تماماً للتسليم على الرمبة!`);
+            }
+        }
+
+        // تزويد "حوار المطبخ": دالة يضغط عليها الكاشير لما يستلم الأكل ويوصله للزبون على الطاولة ليرفع الطلب من المطبخ
+        function deliverFoodFromKitchen() {
+            if (!selectedTable) return;
+            
+            // فلترة وحذف الطلب من المطبخ تماماً لأنه اتسلم
+            kitchenOrders = kitchenOrders.filter(o => o.tableNum !== selectedTable);
+            tableKitchenStatus[selectedTable] = "delivered"; // تم التوصيل بنجاح والأكل عند الزبون
+            
+            document.getElementById('deliverFoodBtn').style.display = 'none'; // إخفاء زر الاستلام
+            initTables();
+            updateKitchenDisplay();
+            alert(`🥡 تم إثبات استلام وتوصيل الأكل لطاولة ${selectedTable} بنجاح!`);
+        }
+
+        function searchTables() {
+            const query = document.getElementById('tableSearchInput').value.trim();
+            const grid = document.getElementById('tablesGrid');
+            grid.innerHTML = '';
+
+            for (let i = 1; i <= 80; i++) {
+                if (query === "" || i.toString().includes(query)) {
+                    let statusClass = '';
+                    let statusIcon = '🪑';
+                    if (tableStatus[i]) {
+                        statusClass = 'busy';
+                        if (tableKitchenStatus[i] === "cooking") { statusIcon = '👨‍🍳'; }
+                        else if (tableKitchenStatus[i] === "ready") { statusClass = 'selected'; statusIcon = '🥡'; }
+                    }
+                    const div = document.createElement('div');
+                    div.className = `table-card ${statusClass} ${selectedTable === i ? 'selected' : ''}`;
+                    div.id = `table-${i}`;
+                    div.onclick = () => selectTable(i);
+                    div.innerHTML = `<div class="t-icon">${statusIcon}</div><span>طاولة ${i}</span>`;
+                    grid.appendChild(div);
+                }
+            }
+        }
+
+        function searchMenu() {
+            const query = document.getElementById('menuSearchInput').value.trim().toLowerCase();
+            const grid = document.getElementById('dynamicMenuGrid');
+            grid.innerHTML = '';
+
+            if (query === "") {
+                filterMenu(currentFilter);
+                return;
+            }
+
+            const matchedProducts = allProducts.filter(p => p.name.toLowerCase().includes(query));
+            
+            if (matchedProducts.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color:var(--text-muted); padding:20px;">عذراً، لم يتم العثور على هذا الصنف!</div>';
+                return;
+            }
+
+            matchedProducts.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'menu-item';
+                div.onclick = () => addToOrder(item);
+                div.innerHTML = `
+                    <div class="icon">${item.icon}</div>
+                    <span class="name">${item.name}</span>
+                    <span class="price">${item.price} ج.م</span>
+                `;
+                grid.appendChild(div);
+            });
+        }
+
+        function checkoutTable() {
+            if (!selectedTable) {
+                alert('الرجاء اختيار طاولة أولاً لإنهاء حسابها!');
+                return;
+            }
+            
+            if (!tableStatus[selectedTable]) {
+                alert(`طاولة ${selectedTable} فارغة بالفعل وليس لها فاتورة مسجلة حالياً!`);
+                return;
+            }
+
+            if (confirm(`هل أنت متأكد من تسوية وإغلاق حساب طاولة ${selectedTable} وتفريغها للزبائن الجدد؟`)) {
+                // تنظيف وحذف أي طلب معلق للمطبخ مرتبط بهذه الطاولة تلقائياً عند الدفع النهائي
+                kitchenOrders = kitchenOrders.filter(o => o.tableNum !== selectedTable);
+                
+                tableStatus[selectedTable] = false; 
+                tableOrders[selectedTable] = [];    
+                tableKitchenStatus[selectedTable] = "empty"; // تفريغ حالة المطبخ للطاولة
+                
+                updateKitchenDisplay();
+                clearCurrentOrder(); 
+                alert(`✓ تم تفريغ طاولة رقم ${selectedTable} بنجاح وتحويلها للحالة الفاضية.`);
+            }
         }
     </script>
 </body>
