@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title >Restaurant-System</title>
+    <title>Restaurant-System</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -34,8 +34,8 @@
         .card-title { color: var(--accent-color); font-size: 18px; font-weight: 600; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
 
         /* أزرار الفلترة الفرعية للمنيو */
-        .menu-filters { display: flex; gap: 10px; margin-bottom: 15px; background: #0f172a; padding: 8px; border-radius: 10px; border: 1px solid var(--border-color); }
-        .filter-btn { background: transparent; color: var(--text-muted); border: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; width: auto; }
+        .menu-filters { display: flex; gap: 10px; margin-bottom: 15px; background: #0f172a; padding: 8px; border-radius: 10px; border: 1px solid var(--border-color); overflow-x: auto; }
+        .filter-btn { background: transparent; color: var(--text-muted); border: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; width: auto; white-space: nowrap; }
         .filter-btn.active { background: #1e293b; color: var(--accent-color); font-weight: bold; }
 
         .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; min-height: 250px; }
@@ -116,6 +116,7 @@
                     <button class="filter-btn active" id="btn-food" onclick="filterMenu('food')">🍔 الأكل والوجبات</button>
                     <button class="filter-btn" id="btn-drinks" onclick="filterMenu('drinks')">🍹 المشروبات كاملة</button>
                     <button class="filter-btn" id="btn-sweets" onclick="filterMenu('sweets')">🍰 الحلويات والتحلية</button>
+                    <button class="filter-btn" id="btn-takeaway" onclick="filterMenu('takeaway')">🥡 تيك أواي بالمطبخ</button>
                 </div>
 
                 <div class="menu-grid" id="dynamicMenuGrid">
@@ -168,7 +169,6 @@
     </div>
 
     <script>
-        // داتا المنيو مقسمة بـ الـ category داخلياً (100 صنف كامل ومتنوع)
         const allProducts = [
             // === الأكل والوجبات (40 صنف) ===
             { id: 1, name: 'برجر دبل تشيز', price: 120, icon: '🍔', category: 'food' },
@@ -289,9 +289,8 @@
         let tableOrders = {}; 
         for (let i = 1; i <= 80; i++) { tableOrders[i] = []; }
 
-        // تزويد "حوار المطبخ": كائن لحفظ حالة الأكل الخاص بكل طاولة (تحضير أم جاهز للتسليم)
         let tableKitchenStatus = {};
-        for (let i = 1; i <= 80; i++) { tableKitchenStatus[i] = "empty"; } // empty, cooking, ready
+        for (let i = 1; i <= 80; i++) { tableKitchenStatus[i] = "empty"; }
 
         window.onload = function() {
             filterMenu('food'); 
@@ -315,6 +314,48 @@
             const grid = document.getElementById('dynamicMenuGrid');
             grid.innerHTML = '';
 
+// إذا كان الاختيار هو تيك أواي المطبخ
+            if (category === 'takeaway') {
+                const takeawayOrders = kitchenOrders.filter(o => o.tableNum === null || o.table === 'تيك أواي');
+                if (takeawayOrders.length === 0) {
+                    grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color:var(--text-muted); padding:20px;">لا توجد طلبات تيك أواي في المطبخ حالياً.</div>';
+                    return;
+                }
+                takeawayOrders.forEach(order => {
+                    const div = document.createElement('div');
+                    div.className = 'menu-item';
+                    
+                    // عند الضغط على طلب التيك أواي يفتح نافذة تأكيد الاستلام والحساب
+                    div.onclick = () => {
+                        if (order.status === 'cooking') {
+                            alert(`هذا الطلب لازال جاري تحضيره في المطبخ 👨‍🍳\nالطلب: ${order.details}`);
+                        } else {
+                            let confirmDeliver = confirm(`هل تريد تسليم طلب التيك أواي هذا وإغلاق حسابة؟\nالطلب: ${order.details}`);
+                            if (confirmDeliver) {
+                                // 1. حذف الطلب من المطبخ تماماً
+                                kitchenOrders = kitchenOrders.filter(o => o.id !== order.id);
+                                
+                                // 2. تحديث الشاشات فوراً
+                                filterMenu('takeaway'); // إعادة إنعاش قائمة التيك أواي
+                                updateKitchenDisplay(); // تحديث شاشة المطبخ الرئيسية
+                                
+                                alert('✓ تم تسليم التيك أواي بنجاح، وحسابه مدفوع ومسجل بالخزينة مسبقاً!');
+                            }
+                        }
+                    };
+
+                    div.innerHTML = `
+                        <div class="icon">📦</div>
+                        <span class="name" style="font-size:11px;">${order.details}</span>
+                        <span class="price" style="color:${order.status === 'cooking' ? 'var(--danger)' : 'var(--success)'};">
+                            ${order.status === 'cooking' ? 'بيجهّز ⏳' : 'اضغط للاستلام 🔔'}
+                        </span>
+                    `;
+                    grid.appendChild(div);
+                });
+                return;
+            }
+
             const filtered = allProducts.filter(p => p.category === category);
             filtered.forEach(item => {
                 const div = document.createElement('div');
@@ -329,7 +370,6 @@
             });
         }
 
-        // تزويد "حوار المطبخ": تلوين خريطة الطاولات حسب حالة المطبخ (أزرق لو الأكل بيتطبخ، برتقالي لو الأكل جاهز ومستني استلامه)
         function initTables() {
             const grid = document.getElementById('tablesGrid');
             grid.innerHTML = '';
@@ -338,12 +378,12 @@
                 let statusIcon = '🪑';
                 
                 if (tableStatus[i]) {
-                    statusClass = 'busy'; // مشغولة عامة
+                    statusClass = 'busy'; 
                     if (tableKitchenStatus[i] === "cooking") {
                         statusClass = 'busy'; 
-                        statusIcon = '👨‍🍳'; // تحت الطبخ
+                        statusIcon = '👨‍🍳'; 
                     } else if (tableKitchenStatus[i] === "ready") {
-                        statusClass = 'selected'; // جاهز للتسليم بلون مميز
+                        statusClass = 'selected'; 
                         statusIcon = '🥡'; 
                     }
                 }
@@ -365,7 +405,6 @@
             currentOrder = [...tableOrders[num]]; 
             updateInvoiceDisplay();
 
-            // تزويد "حوار المطبخ": التحكم في إظهار زرار الاستلام بناءً على حالة الأكل في المطبخ لهذه الطاولة
             if (tableKitchenStatus[num] === "ready") {
                 document.getElementById('deliverFoodBtn').style.display = 'block';
             } else {
@@ -438,9 +477,6 @@
             updateInvoiceDisplay();
         }
 
-        function sendOrderToKitchen() {}
-
-        // تزويد "حوار المطبخ": تغيير شاشة تحضير الطلبات بالمطبخ لتدعم دورة حياة الطلب الحقيقية
         function updateKitchenDisplay() {
             const list = document.getElementById('kitchenList');
             document.getElementById('kitchenCount').innerText = `${kitchenOrders.length} طلبات`;
@@ -452,7 +488,6 @@
             }
 
             kitchenOrders.forEach(order => {
-                // نتحقق من حالة الطلب لعرض الزرار المناسب للشيف في شاشة المطبخ
                 let actionButton = '';
                 if (order.status === "cooking") {
                     actionButton = `<button onclick="readyKitchenOrder(${order.id})" style="width:auto; padding:6px 15px; font-size:13px; background:var(--accent-color); color:black;">👨‍🍳 جاهز للتسليم</button>`;
@@ -473,12 +508,6 @@
             });
         }
 
-        function finishKitchenOrder(id) {}
-
-        // =======================================================
-        // الـ دالات الإضافية المـزودة للنظام بدون تـعديل المنطق القديم
-        // =======================================================
-
         function sendOrderToKitchenWithMemory() {
             if (currentOrder.length === 0) {
                 alert('الفاتورة فارغة! اختر بعض الأصناف أولاً.');
@@ -488,7 +517,7 @@
             if (selectedTable) {
                 tableOrders[selectedTable] = [...currentOrder];
                 tableStatus[selectedTable] = true;
-                tableKitchenStatus[selectedTable] = "cooking"; // تعيين الحالة تحت الطبخ
+                tableKitchenStatus[selectedTable] = "cooking";
                 initTables();
             }
 
@@ -500,25 +529,27 @@
                 details: orderSummary,
                 table: selectedTable ? `طاولة ${selectedTable}` : 'تيك أواي',
                 tableNum: selectedTable,
-                status: "cooking" // الطلب يبدأ بمرحلة الطبخ والتحضير
+                status: "cooking"
             });
 
-            let finalPrice = parseFloat(document.getElementById('totalPrice').innerText);
-            totalSales += finalPrice;
-            document.getElementById('drawerTotal').innerText = totalSales.toFixed(2);
+            // ملحوظة: الحساب بيتم إضافته للخزينة بشكل نهائي عند إنهاء وحساب الطاولة لتجنب التكرار
+            if (!selectedTable) {
+                let finalPrice = parseFloat(document.getElementById('totalPrice').innerText);
+                totalSales += finalPrice;
+                document.getElementById('drawerTotal').innerText = totalSales.toFixed(2);
+            }
 
             updateKitchenDisplay();
             clearCurrentOrder();
             alert('🚀 تم إرسال الطلب وحفظه بذاكرة الطاولة وبدأ الطبخ في المطبخ!');
         }
 
-        // تزويد "حوار المطبخ": دالة تضغط عليها شاشة المطبخ لما الأكل يخلص طبخ ويحتاج تسليم
         function readyKitchenOrder(id) {
             const order = kitchenOrders.find(o => o.id === id);
             if (order) {
-                order.status = "ready"; // تحديث حالة الطلب في قائمة المطبخ
+                order.status = "ready";
                 if (order.tableNum) {
-                    tableKitchenStatus[order.tableNum] = "ready"; // الطاولة الحقيقية أكلها جاهز
+                    tableKitchenStatus[order.tableNum] = "ready";
                 }
                 initTables();
                 updateKitchenDisplay();
@@ -526,62 +557,97 @@
             }
         }
 
-        // تزويد "حوار المطبخ": دالة يضغط عليها الكاشير لما يستلم الأكل ويوصله للزبون على الطاولة ليرفع الطلب من المطبخ
         function deliverFoodFromKitchen() {
             if (!selectedTable) return;
             
-            // فلترة وحذف الطلب من المطبخ تماماً لأنه اتسلم
             kitchenOrders = kitchenOrders.filter(o => o.tableNum !== selectedTable);
-            tableKitchenStatus[selectedTable] = "delivered"; // تم التوصيل بنجاح والأكل عند الزبون
+            tableKitchenStatus[selectedTable] = "delivered";
             
-            document.getElementById('deliverFoodBtn').style.display = 'none'; // إخفاء زر الاستلام
+            document.getElementById('deliverFoodBtn').style.display = 'none';
             initTables();
             updateKitchenDisplay();
             alert(`🥡 تم إثبات استلام وتوصيل الأكل لطاولة ${selectedTable} بنجاح!`);
         }
 
+        // الدالة الجديدة التي تم إضافتها لحل مشكلة إنهاء وحساب الطاولة
+        function checkoutTable() {
+            if (!selectedTable) {
+                alert("لم يتم تحديد طاولة للحساب!");
+                return;
+            }
+
+            if (tableOrders[selectedTable].length === 0) {
+                alert(`طاولة ${selectedTable} فارغة بالفعل وليس عليها طلبات للحساب.`);
+                // تفريغ الطاولة احتياطياً لو كانت معلقة
+                tableStatus[selectedTable] = false;
+                tableKitchenStatus[selectedTable] = "empty";
+                clearCurrentOrder();
+                return;
+            }
+
+            // حساب إجمالي الطاولة لإضافته للخزينة
+            let subtotal = 0;
+            tableOrders[selectedTable].forEach(item => {
+                subtotal += (item.price * item.qty);
+            });
+            let tax = subtotal * 0.14;
+            let total = subtotal + tax;
+
+            // إضافة المبلغ للخزينة الرئيسية وتحديث الشاشة
+            totalSales += total;
+            document.getElementById('drawerTotal').innerText = totalSales.toFixed(2);
+
+            // مسح الطاولة تماماً من الذاكرة وإعادتها فارغة
+            tableOrders[selectedTable] = [];
+            tableStatus[selectedTable] = false;
+            tableKitchenStatus[selectedTable] = "empty";
+
+            // مسح أي طلبات متبقية لهذه الطاولة من قائمة المطبخ إن وجدت
+            kitchenOrders = kitchenOrders.filter(o => o.tableNum !== selectedTable);
+
+            alert(`✓ تم تقفيل حساب طاولة ${selectedTable} بنجاح.\nالإجمالي: ${total.toFixed(2)} ج.م (شامل 14% ضريبة)\nتم إضافة المبلغ للخزينة وتفريغ الطاولة.`);
+            
+            updateKitchenDisplay();
+            clearCurrentOrder();
+        }
+
         function searchTables() {
             const query = document.getElementById('tableSearchInput').value.trim();
             const grid = document.getElementById('tablesGrid');
-            grid.innerHTML = '';
-
-            for (let i = 1; i <= 80; i++) {
-                if (query === "" || i.toString().includes(query)) {
-                    let statusClass = '';
-                    let statusIcon = '🪑';
-                    if (tableStatus[i]) {
-                        statusClass = 'busy';
-                        if (tableKitchenStatus[i] === "cooking") { statusIcon = '👨‍🍳'; }
-                        else if (tableKitchenStatus[i] === "ready") { statusClass = 'selected'; statusIcon = '🥡'; }
-                    }
-                    const div = document.createElement('div');
-                    div.className = `table-card ${statusClass} ${selectedTable === i ? 'selected' : ''}`;
-                    div.id = `table-${i}`;
-                    div.onclick = () => selectTable(i);
-                    div.innerHTML = `<div class="t-icon">${statusIcon}</div><span>طاولة ${i}</span>`;
-                    grid.appendChild(div);
-                }
+            
+            if (query === '') {
+                initTables();
+                return;
             }
-        }
 
+            const cards = grid.querySelectorAll('.table-card');
+            cards.forEach(card => {
+                if (card.querySelector('span').innerText.includes(query)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+        
         function searchMenu() {
             const query = document.getElementById('menuSearchInput').value.trim().toLowerCase();
             const grid = document.getElementById('dynamicMenuGrid');
-            grid.innerHTML = '';
-
-            if (query === "") {
+            
+            if (query === '') {
                 filterMenu(currentFilter);
                 return;
             }
 
-            const matchedProducts = allProducts.filter(p => p.name.toLowerCase().includes(query));
+            grid.innerHTML = '';
+            const filtered = allProducts.filter(p => p.name.toLowerCase().includes(query));
             
-            if (matchedProducts.length === 0) {
-                grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color:var(--text-muted); padding:20px;">عذراً، لم يتم العثور على هذا الصنف!</div>';
+            if(filtered.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color:var(--text-muted); padding:20px;">لم يتم العثور على نتائج للبحث.</div>';
                 return;
             }
 
-            matchedProducts.forEach(item => {
+            filtered.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'menu-item';
                 div.onclick = () => addToOrder(item);
@@ -592,31 +658,6 @@
                 `;
                 grid.appendChild(div);
             });
-        }
-
-        function checkoutTable() {
-            if (!selectedTable) {
-                alert('الرجاء اختيار طاولة أولاً لإنهاء حسابها!');
-                return;
-            }
-            
-            if (!tableStatus[selectedTable]) {
-                alert(`طاولة ${selectedTable} فارغة بالفعل وليس لها فاتورة مسجلة حالياً!`);
-                return;
-            }
-
-            if (confirm(`هل أنت متأكد من تسوية وإغلاق حساب طاولة ${selectedTable} وتفريغها للزبائن الجدد؟`)) {
-                // تنظيف وحذف أي طلب معلق للمطبخ مرتبط بهذه الطاولة تلقائياً عند الدفع النهائي
-                kitchenOrders = kitchenOrders.filter(o => o.tableNum !== selectedTable);
-                
-                tableStatus[selectedTable] = false; 
-                tableOrders[selectedTable] = [];    
-                tableKitchenStatus[selectedTable] = "empty"; // تفريغ حالة المطبخ للطاولة
-                
-                updateKitchenDisplay();
-                clearCurrentOrder(); 
-                alert(`✓ تم تفريغ طاولة رقم ${selectedTable} بنجاح وتحويلها للحالة الفاضية.`);
-            }
         }
     </script>
 </body>
